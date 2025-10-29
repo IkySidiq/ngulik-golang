@@ -3,71 +3,93 @@ package handler
 import (
 	"net/http"
 
-	"bismillah/src/service"
+	"bismillah/src/api/users/dto"
 	"bismillah/src/exceptions"
+	"bismillah/src/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
+type UserHandler struct {
+	service  *service.UserService
+	validate *validator.Validate
+}
+
+func NewUserHandler(s *service.UserService) *UserHandler {
+	validate := validator.New()
+	dto.RegisterValidators(validate) // register custom validator
+
+	return &UserHandler{
+		service:  s,
+		validate: validate,
+	}
+}
 
 // RegisterUser handler
-func RegisterUser(c *gin.Context) {
-	var payload struct {
-		Name     string `json:"name" binding:"required"`
-		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required,min=6"`
-	}
+func (h *UserHandler) RegisterUser(ctx *gin.Context) {
+	var payload dto.RegisterUserDTO
 
-	//* if <short variable declaration>; <condition>
-	if err := c.ShouldBindJSON(&payload); err != nil { 
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := service.CreateUser(payload.Name, payload.Email, payload.Password)
+	// validasi custom password & rules lain
+	if err := h.validate.Struct(payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	id, err := h.service.CreateUser(payload.Name, payload.Email, payload.Password)
 	if err != nil {
 		if _, ok := err.(*exceptions.ClientError); ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User created successfully"})
+	ctx.JSON(http.StatusCreated, gin.H{
+		"message": "User created successfully",
+		"id":      id,
+	})
 }
 
 // LoginUser handler
-func LoginUser(c *gin.Context) {
-	var payload struct {
-		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required"`
-	}
+func (h *UserHandler) LoginUser(ctx *gin.Context) {
+	var payload dto.LoginUserDTO
 
-	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	token, err := service.LoginUser(payload.Email, payload.Password)
+	if err := h.validate.Struct(payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token, err := h.service.LoginUser(payload.Email, payload.Password)
 	if err != nil {
 		if _, ok := err.(*exceptions.AuthenticationError); ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	ctx.JSON(http.StatusOK, gin.H{"token": token})
 }
 
 // GetAllUsers handler
-func GetAllUsers(c *gin.Context) {
-	users, err := service.GetAllUsers()
+func (h *UserHandler) GetAllUsers(ctx *gin.Context) {
+	users, err := h.service.GetAllUsers()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"users": users})
+	ctx.JSON(http.StatusOK, gin.H{"users": users})
 }

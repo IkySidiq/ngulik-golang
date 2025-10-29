@@ -2,60 +2,60 @@ package service
 
 import (
 	"database/sql"
-	"fmt"
-	"os"
 	"time"
+	"os"
 
 	"bismillah/src/exceptions"
 
-	_ "github.com/lib/pq"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/segmentio/ksuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var db *sql.DB
+// TODO: type UserService struct diibaratkan seperti "class UserService" dalam JavaScript. "db" disini setara dengan this.db di JavaScript. 
+type UserService struct {
+	db *sql.DB
+}
 
-func init() {
-	var err error
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_NAME"),
-	)
-
-	db, err = sql.Open("postgres", connStr)
-	if err != nil {
-		panic(err)
-	}
+// TODO: NewUserService membuat instance baru dari UserService dengan koneksi database yang diberikan. Instance ini bisa digunakan untuk memanggil method-method seperti CreateUser, LoginUser, GetAllUsers. Ini juga berperan seperti constructor(db), yang nantinya this.db di fungsi UsersService dapat dijalankan.
+func NewUserService(db *sql.DB) *UserService {
+	return &UserService{db: db}
 }
 
 // CreateUser service
-func CreateUser(name, email, password string) error {
+func (s *UserService) CreateUser(name, email, password string) (string, error) {
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email=$1)", email).Scan(&exists)
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email=$1)", email).Scan(&exists) // TODO: "&" adalah penunjuk ke alamat / memory variable disimpan. Jadi disini maksudnya masukan hasil query ke dalam "exists" dengan alamat memorynya direpresentasikan oleh "&".
 	if err != nil {
-		return err
+		return "", err
 	}
 	if exists {
-		return &exceptions.ClientError{Message: "Email already registered"}
+		return "", &exceptions.ClientError{Message: "Email already registered"}
 	}
 
+	// Generate id sendiri pakai ksuid
+	id := ksuid.New().String()
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	_, err = db.Exec("INSERT INTO users(name, email, password) VALUES($1, $2, $3)", name, email, string(hashedPassword))
+
+	// Insert data dan ambil id dari RETURNING
+	var userId string
+	err = s.db.QueryRow(
+		"INSERT INTO users(id, name, email, password) VALUES($1, $2, $3, $4) RETURNING id",
+		id, name, email, string(hashedPassword),
+	).Scan(&userId)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return userId, nil
 }
 
+
 // LoginUser service
-func LoginUser(email, password string) (string, error) {
-	var id int
+func (s *UserService) LoginUser(email, password string) (string, error) {
+	var id string
 	var hashedPassword string
-	err := db.QueryRow("SELECT id, password FROM users WHERE email=$1", email).Scan(&id, &hashedPassword)
+	err := s.db.QueryRow("SELECT id, password FROM users WHERE email=$1", email).Scan(&id, &hashedPassword)
 	if err != nil {
 		return "", &exceptions.AuthenticationError{Message: "Invalid email or password"}
 	}
@@ -64,7 +64,6 @@ func LoginUser(email, password string) (string, error) {
 		return "", &exceptions.AuthenticationError{Message: "Invalid email or password"}
 	}
 
-	// generate JWT
 	secret := []byte(os.Getenv("JWT_SECRET"))
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": id,
@@ -76,8 +75,8 @@ func LoginUser(email, password string) (string, error) {
 }
 
 // GetAllUsers service
-func GetAllUsers() ([]map[string]interface{}, error) {
-	rows, err := db.Query("SELECT id, name, email FROM users")
+func (s *UserService) GetAllUsers() ([]map[string]interface{}, error) {
+	rows, err := s.db.Query("SELECT id, name, email FROM users")
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +84,7 @@ func GetAllUsers() ([]map[string]interface{}, error) {
 
 	var users []map[string]interface{}
 	for rows.Next() {
-		var id int
+		var id string
 		var name, email string
 		rows.Scan(&id, &name, &email)
 		users = append(users, map[string]interface{}{
