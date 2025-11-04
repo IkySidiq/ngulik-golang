@@ -6,26 +6,27 @@ import (
 	"os"
 
 	"bismillah/src/exceptions"
+	"bismillah/src/utils"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/segmentio/ksuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// TODO: type UserService struct diibaratkan seperti "class UserService" dalam JavaScript. "db" disini setara dengan this.db di JavaScript. 
+// UserService seperti class UserService di JS, punya akses ke this.db
 type UserService struct {
 	db *sql.DB
 }
 
-// TODO: NewUserService membuat instance baru dari UserService dengan koneksi database yang diberikan. Instance ini bisa digunakan untuk memanggil method-method seperti CreateUser, LoginUser, GetAllUsers. Ini juga berperan seperti constructor(db), yang nantinya this.db di fungsi UsersService dapat dijalankan.
+// Constructor untuk UserService
 func NewUserService(db *sql.DB) *UserService {
 	return &UserService{db: db}
 }
 
-// CreateUser service
+// CreateUser service (sekarang pakai BaseModel)
 func (s *UserService) CreateUser(name, email, password string) (string, error) {
 	var exists bool
-	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email=$1)", email).Scan(&exists) // TODO: "&" adalah penunjuk ke alamat / memory variable disimpan. Jadi disini maksudnya masukan hasil query ke dalam "exists" dengan alamat memorynya direpresentasikan oleh "&".
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email=$1)", email).Scan(&exists)
 	if err != nil {
 		return "", err
 	}
@@ -33,25 +34,31 @@ func (s *UserService) CreateUser(name, email, password string) (string, error) {
 		return "", &exceptions.ClientError{Message: "Email already registered"}
 	}
 
-	// Generate id sendiri pakai ksuid
+	// --- Bagian penting: gunakan BaseModel ---
+	userModel := utils.NewBaseModel(s.db, "users")
+
 	id := ksuid.New().String()
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
-	// Insert data dan ambil id dari RETURNING
-	var userId string
-	err = s.db.QueryRow(
-		"INSERT INTO users(id, name, email, password) VALUES($1, $2, $3, $4) RETURNING id",
-		id, name, email, string(hashedPassword),
-	).Scan(&userId)
+	// Data yang akan diinsert
+	userData := map[string]interface{}{
+		"id":       id,
+		"name":     name,
+		"email":    email,
+		"password": string(hashedPassword),
+	}
+
+	// Gunakan BaseModel.Create
+	createdUser, err := userModel.Create(userData)
 	if err != nil {
 		return "", err
 	}
 
-	return userId, nil
+	// Kembalikan id hasil create
+	return createdUser["id"].(string), nil
 }
 
-
-// LoginUser service
+// LoginUser service (belum diubah)
 func (s *UserService) LoginUser(email, password string) (string, error) {
 	var id string
 	var hashedPassword string

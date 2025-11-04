@@ -29,9 +29,9 @@ func main() {
 	routes.RegisterUserRoutes(r)
 
 	//TODO: os.Getenv("NAMA_VARIABLE") dipakai untuk: Mengambil nilai dari environment variable yang ada di sistem atau yang sudah dimuat lewat .env.
-	port := os.Getenv("DB_PORT")
+	port := os.Getenv("SERVER_PORT")
 	if port == "" {
-		port = "8080"
+		port = "3000"
 	}
 
 	fmt.Println("Server running on port", port)
