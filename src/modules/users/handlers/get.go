@@ -10,28 +10,32 @@ import (
 
 // GetAllUsers handler
 func (h *UserHandler) GetAllUsers(ctx *gin.Context) {
-    // Query params dari URL
+    // Ambil query params (default: page=1, limit=10)
     page := ctx.DefaultQuery("page", "1")
     limit := ctx.DefaultQuery("limit", "10")
     search := ctx.DefaultQuery("search", "")
 
-    // Konversi page & limit dari string ke int
+    // Konversi ke int
     pageInt, err := strconv.Atoi(page)
     if err != nil || pageInt < 1 {
-        pageInt = 1
-    }
-    limitInt, err := strconv.Atoi(limit)
-    if err != nil || limitInt < 1 {
-        limitInt = 10
-    }
-
-    users, total, err := h.service.GetAllUsers(pageInt, limitInt, search)
-    if err != nil {
-        response.InternalServerError(ctx, "Failed to fetch users", nil)
+        response.BadRequest(ctx, "Invalid page number", nil)
         return
     }
 
-    // Buat object pagination
+    limitInt, err := strconv.Atoi(limit)
+    if err != nil || limitInt < 1 {
+        response.BadRequest(ctx, "Invalid limit value", nil)
+        return
+    }
+
+    // Ambil data user dari service
+    users, total, err := h.service.GetAllUsers(pageInt, limitInt, search)
+    if err != nil {
+        response.InternalServerError(ctx, "Failed to fetch users", err.Error())
+        return
+    }
+
+    // Hitung pagination info
     pagination := map[string]interface{}{
         "page":       pageInt,
         "limit":      limitInt,
@@ -39,6 +43,6 @@ func (h *UserHandler) GetAllUsers(ctx *gin.Context) {
         "totalPages": int(math.Ceil(float64(total) / float64(limitInt))),
     }
 
-    message := "Users retrieved successfully"
-    response.Paginated(ctx, users, pagination, message)
+    // Response sukses dengan pagination
+    response.Paginated(ctx, users, pagination, "Users retrieved successfully")
 }
