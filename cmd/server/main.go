@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"bismillah/src/api/users/routes"
+	"bismillah/src/modules/users/routes"
 )
 
 func main() {

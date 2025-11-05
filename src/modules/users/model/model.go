@@ -1,4 +1,4 @@
-package service
+package model
 
 import (
 	"database/sql"
@@ -82,18 +82,21 @@ func (s *UserService) LoginUser(email, password string) (string, error) {
 }
 
 // GetAllUsers service
-func (s *UserService) GetAllUsers() ([]map[string]interface{}, error) {
-	rows, err := s.db.Query("SELECT id, name, email FROM users")
+func (s *UserService) GetAllUsers(page, limit int, search string) ([]map[string]interface{}, int, error) {
+	offset := (page - 1) * limit
+	query := "SELECT id, name, email FROM users WHERE name ILIKE $1 ORDER BY name LIMIT $2 OFFSET $3"
+	rows, err := s.db.Query(query, "%"+search+"%", limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
 	var users []map[string]interface{}
 	for rows.Next() {
-		var id string
-		var name, email string
-		rows.Scan(&id, &name, &email)
+		var id, name, email string
+		if err := rows.Scan(&id, &name, &email); err != nil {
+			return nil, 0, err
+		}
 		users = append(users, map[string]interface{}{
 			"id":    id,
 			"name":  name,
@@ -101,5 +104,12 @@ func (s *UserService) GetAllUsers() ([]map[string]interface{}, error) {
 		})
 	}
 
-	return users, nil
+	// Hitung total data
+	var total int
+	err = s.db.QueryRow("SELECT COUNT(*) FROM users WHERE name ILIKE $1", "%"+search+"%").Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
 }

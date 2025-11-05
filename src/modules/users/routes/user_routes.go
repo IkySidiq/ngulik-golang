@@ -2,16 +2,16 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"bismillah/src/api/users/handler"
-	"bismillah/src/service"
+	"bismillah/src/modules/users/handlers"
+	"bismillah/src/modules/users/model"
 	"bismillah/src/utils"
 	"bismillah/src/middleware"
 )
 
 func RegisterUserRoutes(r *gin.Engine) {
 	db, _ := utils.NewDB() // ambil koneksi DB
-	userService := service.NewUserService(db)
-	userHandler := handler.NewUserHandler(userService)
+	userService := model.NewUserService(db)
+	userHandler := handlers.NewUserHandler(userService)
 
 	userGroup := r.Group("/users")
 	{
