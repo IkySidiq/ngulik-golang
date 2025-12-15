@@ -4,12 +4,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"bismillah/src/modules/users/handlers"
 	"bismillah/src/modules/users/model"
-	"bismillah/src/utils"
-	"bismillah/src/middleware"
+	"bismillah/src/config"
+	"bismillah/src/utils/middleware"
 )
 
 func RegisterUserRoutes(r *gin.Engine) {
-	db, _ := utils.NewDB() // ambil koneksi DB
+	db, _ := config.NewDB() // ambil koneksi DB
 	userService := model.NewUserService(db)
 	userHandler := handlers.NewUserHandler(userService)
 
